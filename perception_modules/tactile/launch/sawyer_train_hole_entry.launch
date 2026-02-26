@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- Move robot to Home -->
+  <node pkg="sawyer_sequences" type="sawyer_home.py" name="sawyer_home" output="screen"/>
+
+  <!-- Start the ati real sensor -->
+  <node pkg="devices_interface" type="ati_data_publisher.py" name="ati_ftsensor_data_pub" output="screen" launch-prefix="/bin/bash -c 'sleep 10.0; $0 $@' "/>
+  
+  <!-- Start the Sawyer pick and place demo -->
+  <node pkg="tactile" type="artmap_train_hole_entry.py" name="artmap_assembly" output="screen" launch-prefix="/bin/bash -c 'sleep 10.0; $0 $@' "/>/>
+
+</launch>

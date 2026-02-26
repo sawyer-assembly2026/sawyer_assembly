@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <!-- Start the ati real sensor -->
+  <node pkg="devices_interface" type="ati_data_publisher.py" name="ati_ftsensor_data_pub" output="screen"/>
+
+
+  <!-- Start the Sawyer pick and place demo -->
+  <node pkg="tactile" type="obtain_ftdata_at_home.py" name="obtain_ftdata_at_home" output="screen"/>
+
+</launch>
