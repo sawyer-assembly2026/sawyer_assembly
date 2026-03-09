@@ -2,6 +2,6 @@
 <launch>
   
   <!-- Start the Sawyer peg-in-hole demo -->
-  <node pkg="tactile" type="artmap_assembly.py" name="artmap_assembly" output="screen"/>
+  <node pkg="tactile" type="artmap_assembly_rt.py" name="artmap_assembly" output="screen"/>
 
 </launch>

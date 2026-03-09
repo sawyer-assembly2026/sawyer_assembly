@@ -8,6 +8,6 @@
   <node pkg="devices_interface" type="ati_data_publisher.py" name="ati_ftsensor_data_pub" output="screen" launch-prefix="/bin/bash -c 'sleep 10.0; $0 $@' "/>
   
   <!-- Start the Sawyer pick and place demo -->
-  <node pkg="tactile" type="art_map_predict.py" name="art_map_predict" output="screen" launch-prefix="/bin/bash -c 'sleep 10.0; $0 $@' "/>
+  <node pkg="tactile" type="art_map_predict_rt.py" name="art_map_predict" output="screen" launch-prefix="/bin/bash -c 'sleep 10.0; $0 $@' "/>
 
 </launch>

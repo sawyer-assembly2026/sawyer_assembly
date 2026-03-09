@@ -29,7 +29,16 @@ from intera_interface import (
 )
 from devices_interface import robot_ctl as robot
 from neural_networks import ART
-from geometry_msgs.msg import WrenchStamped
+from geometry_msgs.msg import (
+    PoseStamped,
+    Pose,
+    Point,
+    Quaternion,
+    WrenchStamped
+)
+from tf.transformations import (
+    quaternion_from_euler
+)
 
 #Global variables for force and torque
 #Need to be global to be updated by call back function in subscriber
@@ -67,8 +76,8 @@ def force_moment_factor(S=0.6):
 def obtain_move_prediction(prediction):
     
     #Prediction movement step in rotation and translation
-    rot_step = 0.0174533*1.0 #0.5 deg
-    tran_step = 0.002 #1mm
+    rot_step = 0.0174533*3.0 #0.5 deg
+    tran_step = 0.01 #1mm
     
     #Z- movement not used
     
@@ -79,10 +88,10 @@ def obtain_move_prediction(prediction):
             [0.0, -tran_step, 0.0, 0.0, 0.0, 0.0],
             [0.0, tran_step, 0.0, 0.0, 0.0, 0.0],
             [0.0, 0.0, 0.002, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0, -rot_step, 0.0, 0.0],
             [0.0, 0.0, 0.0, rot_step, 0.0, 0.0],
-            [0.0, 0.0, 0.0, 0.0, -rot_step, 0.0],
+            [0.0, 0.0, 0.0, -rot_step, 0.0, 0.0],
             [0.0, 0.0, 0.0, 0.0, rot_step, 0.0],
+            [0.0, 0.0, 0.0, 0.0, -rot_step, 0.0],
             [0.0, 0.0, 0.0, 0.0, 0.0, -rot_step],
             [0.0, 0.0, 0.0, 0.0, 0.0, rot_step],
             [-tran_step, -tran_step, 0.0, 0.0, 0.0, 0.0],
@@ -280,6 +289,49 @@ def add_image_text(text_input,base_image, position, font_scale, color, thickness
     img_iterate = base_image.copy()
     return cv2.putText(img_iterate, text_input, position, font, font_scale, color, thickness, cv2.LINE_AA)
 
+def send_ik_movement(move_pred,robot,ik_step,move_euler,orientation=False):
+
+    if orientation:
+        #Get current endpoint pose
+        current_position, current_orientation = robot.current_endpoint_pose(quaternion=False)
+    else:
+        #Get current endpoint pose
+        current_position, current_orientation = robot.current_endpoint_pose(quaternion=True)
+
+    current_position[0] = current_position[0] + move_pred[1]
+    current_position[1] = current_position[1] - move_pred[0]
+    current_position[2] = current_position[2] + move_pred[2]
+
+    if orientation:
+        move_euler[0] = current_orientation[0] + move_pred[3]
+        move_euler[1] = current_orientation[1] + move_pred[4]
+        move_euler[2] = current_orientation[2] + move_pred[5]
+
+        roll = move_euler[0]
+        pitch = move_euler[1]
+        yaw = move_euler[2]
+
+        move_quaternion = quaternion_from_euler(roll, pitch, yaw)
+        
+        current_orientation = [0.0,0.0,0.0,0.0]
+
+        current_orientation[0] = float(move_quaternion[0])
+        current_orientation[1] = float(move_quaternion[1])
+        current_orientation[2] = float(move_quaternion[2])
+        current_orientation[3] = float(move_quaternion[3])
+    
+    else:
+        pass
+
+    #Request inverse kinematics at position ik_step with tip desired depending on EAOT
+    joint_angles = robot.ik_srv(current_position, current_orientation)
+
+    #Send position
+    if joint_angles:
+            robot._limb.set_joint_positions(joint_angles)
+    else:
+        rospy.logerr("No Joint Angles provided for move_to_joint_positions. Staying put.")
+
 #Assembly function
 def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_entry=False, rho=0.9, eps=0.18):
     
@@ -308,7 +360,7 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
     z_threshold = 2
 
     #Step Counter
-    steps = 1
+    iterations = 0
 
     try:
 
@@ -337,10 +389,21 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
         rospy.Subscriber("/robot/ati_ft_sensor_topic/", WrenchStamped, obtain_ftdata, queue_size=1)
 
     	#First approach to hole
-        move_confirm = robot.cartesian_approach(move_position=[0.0,0.0,-0.007], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
+        move_confirm = robot.cartesian_approach(move_position=[0.0,0.0,-0.005], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
 
         #Go back flag
         back_flag = False
+
+        #Set slow speed flag
+        set_slow_speed = False
+
+        #Set desired speed (m/s)
+        robot._limb.set_joint_position_speed(0.003)
+
+        ik_step = Pose()
+        move_euler = [0.0,0.0,0.0]
+
+        r = rospy.Rate(100)
 
         #Start assembly cycle after going down and being near the hole
         while not rospy.is_shutdown() and back_flag == False:
@@ -349,22 +412,10 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
             J = force_moment_factor(S=0.6)
             
             #Define J_prev as the current J factor before any prediction
-            J_prev = J
+            #J_prev = J
 
             #Extract current z value
             z_current = sawyer.current_endpoint_pose()[0][2]
-            
-            if not train_entry:
-
-                #Obtain Force moment factor
-                J = force_moment_factor(S=0.6)
-
-                #Current cases for assembly
-                #rospy.loginfo("--------------------------")
-                #rospy.loginfo("J = %s", J)
-                #rospy.loginfo("Current Z = %s", z_current)
-                #rospy.loginfo("Current step = %s", steps)
-
 
             #First check the max force limit has not been reached
             if J < J_max:
@@ -380,66 +431,57 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
                     rospy.loginfo("Current J threshold = %s", epsilon)
                     rospy.loginfo("Final assembly time = %s seconds", execution_time)
 
-                    assembly_success = False
-                    rospy.signal_shutdown("Finishing assembly node")
-                    return assembly_success
+                    assembly_success = True
+                    break
                 
                 #If J below the prediction threshold and not yet at target, move down in z axis
                 elif J < epsilon and z_current > zd:
 
                     #Convert values to string
-                    z_current_str = str(z_current)
-                    J_str = str(J)
-                    pred_str = "Z-"
-                    steps_str = str(steps)
+                    #z_current_str = str(z_current)
+                    #J_str = str(J)
+                    #pred_str = "Z-"
+                    #steps_str = str(steps)
 
                     # Add assembly text info
-                    img_z_value = add_image_text(text_input=z_current_str,base_image=ongoing_img, position=(520, 258), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
-                    img_J_value = add_image_text(text_input=J_str,base_image=img_z_value, position=(520, 313), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
-                    img_next_prediction = add_image_text(text_input=pred_str,base_image=img_J_value, position=(520, 368), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
-                    img_steps = add_image_text(text_input=steps_str,base_image=img_next_prediction, position=(520, 424), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                    #img_z_value = add_image_text(text_input=z_current_str,base_image=ongoing_img, position=(520, 258), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                    #img_J_value = add_image_text(text_input=J_str,base_image=img_z_value, position=(520, 313), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                    #img_next_prediction = add_image_text(text_input=pred_str,base_image=ongoing_img, position=(520, 368), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                    #img_steps = add_image_text(text_input=steps_str,base_image=img_next_prediction, position=(520, 424), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
 
                     #Convert to ros image topic
-                    img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_steps, encoding="bgr8")
+                    #img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_next_prediction, encoding="bgr8")
 
                     #Publish in head image display
-                    image_pub.publish(img_msg)
+                    #image_pub.publish(img_msg)
 
-                    #This movement function utilizes sawyer inverse kinematics to interpolate between to cartesian points at a certain speed
-                    if z_current >= z_hole:
-                        move_confirm = robot.cartesian_approach(move_position=[0.0,0.0,-0.002], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=False)
-                    elif z_current < z_hole:
-                        move_confirm = robot.cartesian_approach(move_position=[0.0,0.0,-0.006], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=False)
+                    send_ik_movement(move_pred=[0.0, 0.0, -0.01, 0.0, 0.0, 0.0],robot=robot, ik_step = ik_step,move_euler = move_euler)
 
                     #rospy.loginfo("Moving down in z axis")
                 
-                    z_down = True
+                    #z_down = True
 
                     if train_entry:
-
-                        if robot._is_clicksmart == True:
-                            robot.set_red_light()
-
                         #Obtain Force moment factor
                         J = force_moment_factor(S=0.6)
 
-                        #Current cases for assembly
-                        #rospy.loginfo("--------------------------")
-                        #rospy.loginfo("J = %s", J)
-                        #rospy.loginfo("Current Z = %s", z_current)
-                        #rospy.loginfo("Current step = %s", steps)
+                        if J > epsilon:
 
-                        #Complement encode input
-                        complement_encode_ati_ft_data = np.concatenate((ati_ft_data[0], 1-ati_ft_data[0]))
-                        
-                        #Use Fuzzy ARTMAP to predict next movement
-                        category_predicted = artmap.predict(complement_encode_ati_ft_data,rho_a=rho)
-                        
-                        #Split output list
-                        prediction = category_predicted[0]
-                        Ia = category_predicted[1][:6].reshape(1,6)
+                            if robot._is_clicksmart == True:
+                                robot.set_red_light()
 
-                        back_flag = retrain_artmap(artmap, robot, retrain_img, Ia, J,eps,train_path=art_train_path, new_pattern=False)
+                            #Complement encode input
+                            complement_encode_ati_ft_data = np.concatenate((ati_ft_data[0], 1-ati_ft_data[0]))
+                            
+                            #Use Fuzzy ARTMAP to predict next movement
+                            category_predicted = artmap.predict(complement_encode_ati_ft_data,rho_a=rho)
+                            
+                            #Split output list
+                            prediction = category_predicted[0]
+                            Ia = category_predicted[1][:6].reshape(1,6)
+
+                            send_ik_movement(move_pred=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],robot=robot, ik_step = ik_step,move_euler = move_euler)
+                            back_flag = retrain_artmap(artmap, robot, retrain_img, Ia, J,eps,train_path=art_train_path, new_pattern=False)
 
                 #If J above the prediction threshold and not yet at target, use Fuzzy ARTMAP to predict next movement
                 elif J > epsilon and z_current > zd:
@@ -456,79 +498,68 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
                  
                     #If value found within current trained categories proceed to move in predicted direction
                     if prediction != None:
-                        
+
                         #Obtain movement vector
                         move_pred = obtain_move_prediction(prediction)   
 
                         #Convert values to string
-                        z_current_str = str(z_current)
-                        J_str = str(J)
-                        pred_str = obtain_move_categories(prediction)
-                        steps_str = str(steps)
+                        #z_current_str = str(z_current)
+                        #J_str = str(J)
+                        #pred_str = obtain_move_categories(prediction)
+                        #steps_str = str(steps)
+                        #print(pred_str)
 
                         # Add assembly text info
-                        img_z_value = add_image_text(text_input=z_current_str,base_image=ongoing_img, position=(520, 258), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
-                        img_J_value = add_image_text(text_input=J_str,base_image=img_z_value, position=(520, 313), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
-                        img_next_prediction = add_image_text(text_input=pred_str,base_image=img_J_value, position=(520, 368), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
-                        img_steps = add_image_text(text_input=steps_str,base_image=img_next_prediction, position=(520, 424), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                        #img_z_value = add_image_text(text_input=z_current_str,base_image=ongoing_img, position=(520, 258), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                        #img_J_value = add_image_text(text_input=J_str,base_image=img_z_value, position=(520, 313), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                        #img_next_prediction = add_image_text(text_input=pred_str,base_image=ongoing_img, position=(520, 368), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
+                        #img_steps = add_image_text(text_input=steps_str,base_image=img_next_prediction, position=(520, 424), font_scale=0.85, color=(0, 0, 255), thickness=2, font=cv2.FONT_HERSHEY_SIMPLEX)
 
                         #Convert to ros image topic
-                        img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_steps, encoding="bgr8")
+                        #img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_next_prediction, encoding="bgr8")
 
                         #Publish in head image display
-                        image_pub.publish(img_msg)
+                        #image_pub.publish(img_msg)
 
                         #Check if a up down loop in the z axis exists and retrain fuzzy artmap if desired
-                        if prediction == 5:
-                            z_up = True
-                        else:
-                            z_down = False
-                            z_counter = 0
+                        #if prediction == 5:
+                        #    z_up = True
+                        #else:
+                        #    z_down = False
+                        #    z_counter = 0
                             
-                        if z_down and z_up:
-                            z_counter += 1
-                            z_down = False
-                            z_up = False
+                        #if z_down and z_up:
+                        #    z_counter += 1
+                        #    z_down = False
+                        #    z_up = False
                             
-                        if z_counter >= z_threshold:
-                            back_flag = retrain_artmap(artmap, robot, retrain_img, Ia, J,eps,train_path=art_train_path, new_pattern=False)
-                            z_counter = 0
+                        #if z_counter >= z_threshold:
+                        #    back_flag = retrain_artmap(artmap, robot, retrain_img, Ia, J,eps,train_path=art_train_path, new_pattern=False)
+                        #    z_counter = 0
                         
                         #No movement category(0) indicates we are at optimal contact during assembly
                         #However a loop can be induced in which we stay at No movement condition instead of going down
                         if prediction > 0:
-                            #Translation movement
-                            if move_pred[3] == 0.0 and move_pred[4] == 0.0 and move_pred[5] == 0.0:
-                                if z_current < z_hole + 0.003:
-                                    move_confirm = robot.cartesian_approach(move_position=[move_pred[0],move_pred[1],move_pred[2]], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=False)
-                                    rospy.loginfo("In hole, executing small movements")
-                                else:
-                                    move_confirm = robot.cartesian_approach(move_position=[move_pred[0]*1.5,move_pred[1]*1.5,move_pred[2]], joint_speed=0.01 ,linear_speed=0.01, frecuency=100, verbose=False)						
-                                    rospy.loginfo("Above hole, executing regular movements")
-                            #Rotation movement
-                            elif move_pred[0] == 0.0 and move_pred[1] == 0.0 and move_pred[2] == 0.0:
-                                robot.move_to_cartesian_relative(position=[0.0,0.0,0.0], orientation=[move_pred[3],move_pred[4],move_pred[5]], move_confirm=True, verbose=False)
-
-                            #str_mov = obtain_move_categories(prediction)
-                            #rospy.loginfo("Fuzzy ARTMAP movement done in %s direction", str_mov)
-                            #rospy.loginfo("Move prediction: %s", move_pred)
                             
-                            #Wait for transient to pass after movement
-                            time.sleep(1.0)
+                            if move_pred[3] != 0.0 or move_pred[4] != 0.0 or move_pred[5] != 0.0:
+                                send_ik_movement(move_pred=move_pred,robot=robot, ik_step = ik_step,move_euler = move_euler,orientation=True)
+                            else:
+                                send_ik_movement(move_pred=move_pred,robot=robot, ik_step = ik_step,move_euler = move_euler,orientation=False)
                             
                             #Obtain current force moment factor
-                            J_current = force_moment_factor(S=0.6)
+                            #J_current = force_moment_factor(S=0.6)
                             
                             #Classify result as good or excellent only if it is not a no movement or a z movement upwards
                             #That is because when searching the hole at the beginning of the assembly a z movement upwards will reduce force significantly
                             #But does not mean it is a pattern we want to save to the knowledge base
-                            if prediction != 5 and prediction >0:
+                            #if prediction != 5 and prediction >0:
                                 #Classify how good the movement was and act accordingly
-                                movement_result_classifier(artmap, J_prev, J_current, J_max, Ia)
+                            #    movement_result_classifier(artmap, J_prev, J_current, J_max, Ia)
                             
                         #If inside a loop with no movement increase epsilon to continue moving
                         else:
                             if train_entry:
+                                send_ik_movement(move_pred=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],robot=robot, ik_step = ik_step,move_euler = move_euler)
                                 back_flag = retrain_artmap(artmap, robot, retrain_img, Ia, J,eps,train_path=art_train_path, new_pattern=False)
                             else:
                                 rospy.loginfo("No movement predicted, increasing J threshold")
@@ -536,9 +567,8 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
                         
                     #Now if category was not found within one of the force patterns prompt user to retrain weights
                     else:
+                        send_ik_movement(move_pred=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0],robot=robot, ik_step = ik_step,move_euler = move_euler)
                         back_flag = retrain_artmap(artmap, robot, retrain_img, Ia, J,eps,train_path=art_train_path, new_pattern=True)
-                    
-
                 
                 #If J above epsilon and we are at the desired z value, 
                 elif J > epsilon and z_current <= zd:
@@ -552,19 +582,24 @@ def assembly_cycle(artmap, train_file, robot, head_display, image_pub, train_ent
                     assembly_success = True
                     break
                 
-                steps +=1        
+                iterations +=1        
 
             else:
                 rospy.loginfo("Assembly stopped, maximum force exceeded")
                 assembly_success = False
                 break
-    
+            
+
+            r.sleep()
+
     except rospy.ROSInterruptException:
 
         rospy.signal_shutdown("Finishing testing node")
 
     end_time = time.clock()
     execution_time = end_time - start_time
+    frecuency = iterations/execution_time
+    rospy.loginfo("Prediction Frecuency, %s", frecuency)
     return assembly_success, execution_time
 
 if __name__ == '__main__':
@@ -586,8 +621,7 @@ if __name__ == '__main__':
         """
         Class instances for robot control and Fuzzy ARTMAP Training
         """
-        #Create sawyer robot instance
-        sawyer = robot.SawyerRobot()
+
         #Create Head Display instance
         headdisplay = HeadDisplay()
         #Create navigator instance
@@ -610,6 +644,9 @@ if __name__ == '__main__':
                 START PAGE
                 Select Mode
                 """
+                #Create sawyer robot instance
+                sawyer = robot.SawyerRobot()
+
                 #Create FuzzyARTMAP Neural Network Instance
                 artmap = ART.FuzzyArtMap()
 
@@ -633,12 +670,20 @@ if __name__ == '__main__':
 
                 #Release button if pressed
                 while square_button_state != 0 or show_button_state != 0 or back_button_state != 0:
+
+                    #Initialize button state
+                    #Square for Training mode
+                    #Show for Normal mode
+                    square_button_state = navigator.get_button_state("right_button_square")
+                    show_button_state = navigator.get_button_state("right_button_show")
+                    back_button_state = navigator.get_button_state("right_button_back")
+
                     #Display Release button image
                     image_path = package_path + "/share/assembly_images/releasebuttons.png"
                     headdisplay.display_image(image_path)
 
                 #Button signal debounce
-                time.sleep(0.25)
+                time.sleep(0.1)
                 
                 #Display database selection image
                 image_path = package_path + "/share/assembly_images/mode.png"
@@ -685,12 +730,18 @@ if __name__ == '__main__':
 
                 #Release button if pressed
                 while square_button_state != 0 or ok_button_state != 0:
+                    
+                    #Square for New database
+                    #Ok for current database
+                    square_button_state = navigator.get_button_state("right_button_square")
+                    ok_button_state = navigator.get_button_state("right_button_ok")
+
                     #Display Release button image
                     image_path = package_path + "/share/assembly_images/releasebuttons.png"
                     headdisplay.display_image(image_path)
 
                 #Button signal debounce
-                time.sleep(0.25)
+                time.sleep(0.1)
 
                 #Display database selection image
                 image_path = package_path + "/share/assembly_images/select_database.png"
@@ -818,12 +869,15 @@ if __name__ == '__main__':
 
             #Release button if pressed
             while ok_button_state != 0:
+                #Ok for current database
+                ok_button_state = navigator.get_button_state("right_button_ok")
+
                 #Display Release button image
                 image_path = package_path + "/share/assembly_images/releasebuttons.png"
                 headdisplay.display_image(image_path)
 
             #Button signal debounce
-            time.sleep(0.25)
+            time.sleep(0.1)
 
             #Display database selection image
             image_path = package_path + "/share/assembly_images/startassembly.png"
@@ -852,7 +906,7 @@ if __name__ == '__main__':
             sawyer.set_speed(max_linear_speed=0.001, max_linear_accel = 0.001, max_rotational_speed = 0.01, max_rotational_accel = 0.01)
 
             #Start assembly cycle
-            assembly_final_state, execution_time = assembly_cycle(artmap=artmap, train_file=train_file,robot=sawyer, head_display=headdisplay, train_entry=train_entry, image_pub=image_pub, rho=0.90, eps=0.15)
+            assembly_final_state, execution_time = assembly_cycle(artmap=artmap, train_file=train_file,robot=sawyer, head_display=headdisplay, train_entry=train_entry, image_pub=image_pub, rho=0.95, eps=0.12)
             
             time.sleep(1.0)
             
@@ -883,12 +937,17 @@ if __name__ == '__main__':
 
             #Release button if pressed
             while square_button_state != 0 or ok_button_state != 0 or back_button_state != 0:
+
+                square_button_state = navigator.get_button_state("right_button_square")
+                ok_button_state = navigator.get_button_state("right_button_ok")
+                back_button_state = navigator.get_button_state("right_button_back")
+
                 #Display Release button image
                 image_path = package_path + "/share/assembly_images/releasebuttons.png"
                 headdisplay.display_image(image_path)
 
             #Button signal debounce
-            time.sleep(0.25)
+            time.sleep(0.1)
             
             #Display assembly final state image
             if assembly_final_state:

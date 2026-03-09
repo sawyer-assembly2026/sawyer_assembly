@@ -18,7 +18,6 @@ import os
 from datetime import datetime
 from devices_interface import robot_ctl as robot
 from geometry_msgs.msg import WrenchStamped
-import multiprocessing
 
 #Global variables for force and torque
 #Need to be global to be updated by call back function in subscriber
@@ -53,37 +52,37 @@ def move_to_pos(robot,pos_command,step, rot_step):
         if pos_command == "None":
             pass
         elif pos_command == "X+":
-            robot.cartesian_approach(move_position=[0.0,-step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
-        elif pos_command == "X-":
-            robot.cartesian_approach(move_position=[0.0,step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
-        elif pos_command == "Y+":
             robot.cartesian_approach(move_position=[step,0.0,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
-        elif pos_command == "Y-":
+        elif pos_command == "X-":
             robot.cartesian_approach(move_position=[-step,0.0,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
+        elif pos_command == "Y+":
+            robot.cartesian_approach(move_position=[0.0,step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
+        elif pos_command == "Y-":
+            robot.cartesian_approach(move_position=[0.0,-step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
         elif pos_command == "Z+":
             robot.cartesian_approach(move_position=[0.0,0.0,step], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
         elif pos_command == "Z-":
             robot.cartesian_approach(move_position=[0.0,0.0,-step], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
         elif pos_command == "RotX+":
-            robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[0.0,rot_step,0.0],move_confirm=True)
-        elif pos_command == "RotX-":
-            robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[0.0,-rot_step,0.0],move_confirm=True)
-        elif pos_command == "RotY+":
             robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[rot_step,0.0,0.0],move_confirm=True)
-        elif pos_command == "RotY-":
+        elif pos_command == "RotX-":
             robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[-rot_step,0.0,0.0],move_confirm=True)
+        elif pos_command == "RotY+":
+            robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[0.0,rot_step,0.0],move_confirm=True)
+        elif pos_command == "RotY-":
+            robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[0.0,-rot_step,0.0],move_confirm=True)
         elif pos_command == "RotZ+":
             robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[0.0,0.0,0.0174533*13],move_confirm=True)
         elif pos_command == "RotZ-":
             robot.move_to_cartesian_relative(position=[0.0,0.0,0.0],orientation=[0.0,0.0,-0.0174533*13],move_confirm=True)
         elif pos_command == "X+Y+":
-            robot.cartesian_approach(move_position=[step,-step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
-        elif pos_command == "X+Y-":
-            robot.cartesian_approach(move_position=[-step,-step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
-        elif pos_command == "X-Y+":
             robot.cartesian_approach(move_position=[step,step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
-        elif pos_command == "X-Y-":
+        elif pos_command == "X+Y-":
+            robot.cartesian_approach(move_position=[step,-step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
+        elif pos_command == "X-Y+":
             robot.cartesian_approach(move_position=[-step,step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
+        elif pos_command == "X-Y-":
+            robot.cartesian_approach(move_position=[-step,-step,0.0], joint_speed=0.001 ,linear_speed=0.001, frecuency=100, verbose=True)
 
 def adquisition_cycle(robot,pos_command,step, rot_step, test_time=1.0, category=[]):
 

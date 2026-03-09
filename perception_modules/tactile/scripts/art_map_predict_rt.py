@@ -14,10 +14,12 @@ import rospy
 import rospkg
 import cv2
 import cv_bridge
+import math
 from sensor_msgs.msg import Image
 import time
 import numpy as np
 import os
+import sys
 from datetime import datetime
 from devices_interface import robot_ctl as robot
 from intera_interface import (
@@ -27,7 +29,26 @@ from intera_interface import (
 )
 from neural_networks import ART
 from devices_interface import ATI_Net as ati
-from geometry_msgs.msg import WrenchStamped
+from geometry_msgs.msg import (
+    PoseStamped,
+    Pose,
+    Point,
+    Quaternion,
+    WrenchStamped
+)
+from tf.transformations import (
+    euler_from_quaternion, 
+    quaternion_from_euler,
+    quaternion_slerp,
+)
+
+from std_msgs.msg import Header
+from sensor_msgs.msg import JointState
+
+from intera_core_msgs.srv import (
+    SolvePositionFK,
+    SolvePositionFKRequest,
+)
 
 #Global variables for force and torque
 #Need to be global to be updated by call back function in subscriber
@@ -54,9 +75,9 @@ def prediction_adquisition_cycle(artmap, robot, navigator):
     global ati_ft_data
 
     #Desired rotation step 1deg = 0.0175 approx.
-    rot_step = 0.0175*3
+    rot_step = 0.0175*0.03
     #Desired translation step 0.001 m = 1mm
-    tran_step = 0.01
+    tran_step = 0.001
 
     pred = [
             [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -129,7 +150,7 @@ def prediction_adquisition_cycle(artmap, robot, navigator):
         package_path = rospack.get_path('tactile')
 
         #force input in image font
-        position1 = (75, 125)
+        position1 = (75, 100)
         font1 = cv2.FONT_HERSHEY_SIMPLEX
         font_scale1 = 0.72
         color1 = (0, 0, 255)
@@ -160,113 +181,179 @@ def prediction_adquisition_cycle(artmap, robot, navigator):
         rospy.Subscriber("/robot/ati_ft_sensor_topic/", WrenchStamped, obtain_ftdata, queue_size=1)
         image_pub = rospy.Publisher('/robot/head_display', Image, latch=True, queue_size=10)
 
-        global_start_time = rospy.Time.now()
+        #Set desired speed (m/s)
+        robot._limb.set_joint_position_speed(0.01)
+        ik_step = Pose()
+        start_time = time.clock()
+        move_euler = [0,0,0]
+        i = 0
+        r = rospy.Rate(100)
 
-        while not rospy.is_shutdown():
-            
+        #while not rospy.is_shutdown():
+
+        for i in range(5000):
+
+            if rospy.is_shutdown():
+                return
+
             complement_encode_ati_ft_data = np.concatenate((ati_ft_data[0], 1-ati_ft_data[0]))
-            
+           
             j = artmap.predict(complement_encode_ati_ft_data,rho_a=0.9)
 
             k = j[0]
+            i+=1
 
             if k != None:
+                
+                # #Get current endpoint pose
+                current_position, current_orientation = robot.current_endpoint_pose(quaternion=True)
 
-                img_pred_iterate = img_pred.copy()
-                img_pred_class = cv2.putText(img_pred_iterate, move_categories[k][0], position3, font3, font_scale3, color3, thickness3, cv2.LINE_AA)
+                #ik_step.position.x = current_position[0] + pred[k][1]
+                #ik_step.position.x = current_position[0]
+                #ik_step.position.y = current_position[1] - pred[k][0]
+                #ik_step.position.y = current_position[1]
+                current_position[2] = current_position[2] - 0.005
+
+                #move_euler[0] = current_orientation[0] + pred[k][3]
+                #move_euler[1] = current_orientation[1] + pred[k][4]
+                #move_euler[2] = current_orientation[2] + pred[k][5]
+
+                #roll = move_euler[0]
+                #pitch = move_euler[1]
+                #yaw = move_euler[2]
+
+                #move_quaternion = quaternion_from_euler(roll, pitch, yaw)
+
+                #ik_step.orientation.x = float(move_quaternion[0])
+                #ik_step.orientation.y = float(move_quaternion[1])
+                #ik_step.orientation.z = float(move_quaternion[2])
+                #ik_step.orientation.w = float(move_quaternion[3])
+                
+                #ik_step.orientation.x = current_orientation[0]
+                #ik_step.orientation.y = current_orientation[1]
+                #ik_step.orientation.z = current_orientation[2]
+                #ik_step.orientation.w = current_orientation[3]
+
+                #Request inverse kinematics at position ik_step with tip desired depending on EAOT
+                joint_angles = robot.ik_srv(current_position, current_orientation)
+
+                #Send position
+                if joint_angles:
+                    robot._limb.set_joint_positions(joint_angles)
+                else:
+                    rospy.logerr("No Joint Angles provided for move_to_joint_positions. Staying put.")
+
+                #img_pred_iterate = img_pred.copy()
+                #img_pred_class = cv2.putText(img_pred_iterate, move_categories[k][0], position3, font3, font_scale3, color3, thickness3, cv2.LINE_AA)
                 #Convert to ros image topic
-                img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_pred_class, encoding="bgr8")
+                #img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_pred_class, encoding="bgr8")
 
                 #Publish in head image display
-                image_pub.publish(img_msg)
-                robot.move_to_cartesian_relative(position=[pred[k][0],pred[k][1],pred[k][2]],orientation=[pred[k][3],pred[k][4],pred[k][5]], move_confirm=True, verbose=True)
-                time.sleep(1.0)
+                #image_pub.publish(img_msg)
+                #robot.move_to_cartesian_relative(position=[pred[k][0],pred[k][1],pred[k][2]],orientation=[pred[k][3],pred[k][4],pred[k][5]], move_confirm=True, verbose=True)
+                #time.sleep(1.0)
             else:
+                #Remove weights destined to retrain
+                artmap.remove_prediction_weight()
 
-                if robot._is_clicksmart == True:
-                    robot.set_red_light()
+                # if robot._is_clicksmart == True:
+                #     robot.set_red_light()
 
-                # Add force input text to the image
-                force_input = str(j[1][:6])
-                img_iterate = img.copy()
-                img_force = cv2.putText(img_iterate, force_input, position1, font1, font_scale1, color1, thickness1, cv2.LINE_AA)
+                # # Add force input text to the image
+                # force_input = str(j[1][:6])
+                # img_iterate = img.copy()
+                # img_force = cv2.putText(img_iterate, force_input, position1, font1, font_scale1, color1, thickness1, cv2.LINE_AA)
 
-                #Initializa Navigator 
-                inital_state = navigator.get_wheel_state("right_wheel")
-                square_button_state = navigator.get_button_state("right_button_square")
-                ok_button_state = navigator.get_button_state("right_button_ok")
+                # #Initializa Navigator 
+                # inital_state = navigator.get_wheel_state("right_wheel")
+                # square_button_state = navigator.get_button_state("right_button_square")
+                # ok_button_state = navigator.get_button_state("right_button_ok")
 
-                while square_button_state == 0 and ok_button_state == 0:
+                # while square_button_state == 0 and ok_button_state == 0:
 
-                    #Update button states
-                    current_state = navigator.get_wheel_state("right_wheel")
-                    square_button_state = navigator.get_button_state("right_button_square")
-                    ok_button_state = navigator.get_button_state("right_button_ok")
+                #     #Update button states
+                #     current_state = navigator.get_wheel_state("right_wheel")
+                #     square_button_state = navigator.get_button_state("right_button_square")
+                #     ok_button_state = navigator.get_button_state("right_button_ok")
 
-                    #rospy.loginfo("Current input not recognized by Fuzzy ARTMAP: %s", j[1])
-                    #rospy.loginfo("Category choices:\n None (0)\n X+ (1)\n X- (2)\n Y+ (3)\n Y- (4)\n Z+ (5)\n Z- (6)\n RotX+ (7)\n RotX- (8)\n RotY+ (9)\n RotY- (10)\n RotZ+ (11)\n RotZ- (12)\n X+Y+ (13)\n X+Y- (14)\n X-Y+ (15)\n X-Y- (16)\n")
-                    category_input = abs(inital_state - current_state)
+                #     #rospy.loginfo("Current input not recognized by Fuzzy ARTMAP: %s", j[1])
+                #     #rospy.loginfo("Category choices:\n None (0)\n X+ (1)\n X- (2)\n Y+ (3)\n Y- (4)\n Z+ (5)\n Z- (6)\n RotX+ (7)\n RotX- (8)\n RotY+ (9)\n RotY- (10)\n RotZ+ (11)\n RotZ- (12)\n X+Y+ (13)\n X+Y- (14)\n X-Y+ (15)\n X-Y- (16)\n")
+                #     category_input = abs(inital_state - current_state)
 
-                    #Update inital state in case outside limits
-                    if category_input > 16:
-                         inital_state = navigator.get_wheel_state("right_wheel")
+                #     #Update inital state in case outside limits
+                #     if category_input > 16:
+                #          inital_state = navigator.get_wheel_state("right_wheel")
                     
-                    category_input_str = str(category_input)
+                #     category_input_str = str(category_input)
 
-                    # Add force input text to the image
-                    img_force_iterate = img_force.copy()
-                    img_force_class = cv2.putText(img_force_iterate, category_input_str, position2, font2, font_scale2, color2, thickness2, cv2.LINE_AA)
+                #     # Add force input text to the image
+                #     img_force_iterate = img_force.copy()
+                #     img_force_class = cv2.putText(img_force_iterate, category_input_str, position2, font2, font_scale2, color2, thickness2, cv2.LINE_AA)
 
-                    #Convert to ros image topic
-                    img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_force_class, encoding="bgr8")
+                #     #Convert to ros image topic
+                #     img_msg = cv_bridge.CvBridge().cv2_to_imgmsg(img_force_class, encoding="bgr8")
 
-                    #Publish in head image display
-                    image_pub.publish(img_msg)
+                #     #Publish in head image display
+                #     image_pub.publish(img_msg)
 
-                    #category_input = raw_input('Input Category for retraining or type "cancel" to avoid retraining: ')
+                #     #category_input = raw_input('Input Category for retraining or type "cancel" to avoid retraining: ')
                     
-                    if ok_button_state != 0:
-                         category_input = "cancel"
+                #     if ok_button_state != 0:
+                #          category_input = "cancel"
 
-                if category_input is not "cancel":
+                # if category_input is not "cancel":
                         
-                    #Train Choice
-                    tc = int(category_input)
+                #     #Train Choice
+                #     tc = int(category_input)
 
-                    category = categories[tc][0]
+                #     category = categories[tc][0]
                         
-                    for movement in categories:
-                        direction = movement[0]
-                        if direction == category:
-                            Ia = j[1][:6].reshape(1,6)
-                            Ib = movement[1]
+                #     for movement in categories:
+                #         direction = movement[0]
+                #         if direction == category:
+                #             Ia = j[1][:6].reshape(1,6)
+                #             Ib = movement[1]
                                 
-                            #Retrain Fuzzy ARTMAP (Give dimensions before adding complement)
-                            artmap.train(Ia_dim=6, Ib_dim=6, train_path="/home/kid/ros_ws/src/sawyer_simulator/sawyer_sim_examples/train_02.csv", save_weights=True, load_csv=False,  Ia_retrain = Ia, Ib_retrain = Ib)
+                #             #Retrain Fuzzy ARTMAP (Give dimensions before adding complement)
+                #             artmap.train(Ia_dim=6, Ib_dim=6, train_path="/home/kid/ros_ws/src/sawyer_simulator/sawyer_sim_examples/train_3.csv", save_weights=True, load_csv=False,  Ia_retrain = Ia, Ib_retrain = Ib)
 
-                            #Load trained weights
-                            artmap.load_weights()
+                #             #Load trained weights
+                #             artmap.load_weights()
 
-                            if robot._is_clicksmart == True:
-                                robot.set_blue_light()
+                #             if robot._is_clicksmart == True:
+                #                 robot.set_blue_light()
 
-                        #Display Intera SDK home image
-                        image_path = package_path + "/share/sawyer_sdk_research.png"
-                        headdisplay.display_image(image_path)
+                #         #Display Intera SDK home image
+                #         image_path = package_path + "/share/sawyer_sdk_research.png"
+                #         headdisplay.display_image(image_path)
                     
-                else: 
-                        rospy.loginfo("Retrain canceled, resuming prediction sequence...")
+                # else: 
+                #         rospy.loginfo("Retrain canceled, resuming prediction sequence...")
                         
-                        #Remove weights destined to retrain
-                        artmap.remove_prediction_weight()
+                #         #Remove weights destined to retrain
+                #         artmap.remove_prediction_weight()
 
-                        if robot._is_clicksmart == True:
-                            robot.set_blue_light()
+                #         if robot._is_clicksmart == True:
+                #             robot.set_blue_light()
 
-                        #Display Intera SDK home image
-                        image_path = package_path + "/share/sawyer_sdk_research.png"
-                        headdisplay.display_image(image_path)
+                #         #Display Intera SDK home image
+                #         image_path = package_path + "/share/sawyer_sdk_research.png"
+                #         headdisplay.display_image(image_path)
+
+            r.sleep()
+            
         
+        else:
+        
+            end_time = time.clock()
+            execution_time = end_time - start_time
+
+            frecuency = (i+1)/execution_time
+            print("Iterations", i+1)
+            print("execution time", execution_time)
+            print("loop frecuency", frecuency)
+            sys.exit()
+
     except rospy.ROSInterruptException:
         rospy.signal_shutdown("Finishing testing node")
 
