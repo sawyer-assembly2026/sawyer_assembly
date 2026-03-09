@@ -74,7 +74,7 @@ class DeltaFtSensor():
         rawdata = self.sock.recv(36)
         data = struct.unpack('!IIIiiiiii', rawdata)[3:]
         data = [(data[i]/1e6) for i in range(6)]
-        return data
+        return np.array(data)
         
     def start_measuring(self):
         

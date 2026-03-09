@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
+import numpy as np
 from geometry_msgs.msg import WrenchStamped
 from devices_interface import ATI_Net as ati
 
@@ -31,13 +32,15 @@ def publish_ftdata(sensor_ref):
         
         #Normalize data
         #Check limits of force and moment
-        raw_data[0] = (raw_data[0] + 10)/20
-        raw_data[1] = (raw_data[1] + 10)/20
+        raw_data[0] = (raw_data[0] + 8)/16
+        raw_data[1] = (raw_data[1] + 8)/16
         raw_data[2] = (raw_data[2] + 20)/40
-        raw_data[3] = (raw_data[3] + 5)/10
-        raw_data[4] = (raw_data[4] + 5)/10
-        raw_data[5] = (raw_data[5] + 5)/10
+        raw_data[3] = (raw_data[3] + 1.5)/3
+        raw_data[4] = (raw_data[4] + 1.5)/3
+        raw_data[5] = (raw_data[5] + 1.5)/3
 
+        raw_data = np.clip(raw_data,0.000,1.000)
+        
         #Put data in auxiliary data to publish
         ft_wrench.wrench.force.x = raw_data[0]
         ft_wrench.wrench.force.y = raw_data[1]

@@ -38,12 +38,26 @@ from geometry_msgs.msg import (
     Point,
     Quaternion,
 )
+from sensor_msgs.msg import ( 
+    JointState 
+ ) 
+
 from tf.transformations import (
     euler_from_quaternion, 
     quaternion_from_euler,
     quaternion_slerp,
 )
 from tf import TransformListener
+
+from std_msgs.msg import Header
+
+from intera_core_msgs.srv import (
+    SolvePositionFK,
+    SolvePositionFKRequest,
+    SolvePositionIK,
+    SolvePositionIKRequest,
+)
+
 
 class SawyerRobot():
     
@@ -55,9 +69,13 @@ class SawyerRobot():
             self._limb = Limb()
             self.tf = TransformListener()
 
+            self.joint_states = rospy.Subscriber('robot/joint_states', JointState, self._on_joint_states, queue_size=1, tcp_nodelay=True)
+            self.joint_names = []
+            self.joint_angles = []
+
         except:
             rospy.logerr("Limb reference not found, check connection to robot")
-                    
+
         #Set movement parameters
         self.max_linear_speed = max_linear_speed
         self.max_linear_accel = max_linear_accel
@@ -151,7 +169,106 @@ class SawyerRobot():
                 self.tip_name = "right_hand"
                 msg = "No gripper connection found, check EOAT if gripper connected but not detected"
                 rospy.logwarn(msg)
-    
+        
+        #Fk service info
+        self._ns = "ExternalTools/" + "right" + "/PositionKinematicsNode/FKService"
+        self._fksvc = rospy.ServiceProxy(self._ns, SolvePositionFK)
+        self._joints = JointState()
+        self._fkreq = SolvePositionFKRequest()
+        # Add desired pose for forward kinematics
+        self._fkreq.configuration.append(self._joints)
+        # Request forward kinematics from base to "right_hand" link
+        self._fkreq.tip_names.append(self.tip_name)
+
+        #Ik service client
+        self._ik_ns = "ExternalTools/" + "right" + "/PositionKinematicsNode/IKService"
+        self._iksvc = rospy.ServiceProxy(self._ik_ns, SolvePositionIK)
+        self._ikreq = SolvePositionIKRequest()
+        ik_hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        ik_poses = {
+            'right': PoseStamped(
+                header=ik_hdr,
+                pose=Pose(
+                    position=Point(
+                        x=0.450628752997,
+                        y=0.161615832271,
+                        z=0.217447307078,
+                    ),
+                    orientation=Quaternion(
+                        x=0.704020578925,
+                        y=0.710172716916,
+                        z=0.00244101361829,
+                        w=0.00194372088834,
+                    ),
+                ),
+            ),
+        }
+        # Add desired pose for inverse kinematics
+        self._ikreq.pose_stamp.append(ik_poses['right'])
+        # Request inverse kinematics from base to "right_hand" link
+        self._ikreq.tip_names.append(self.tip_name)
+
+
+    def ik_srv(self,position,orientation):
+
+        hdr = Header(stamp=rospy.Time.now(), frame_id='base')
+        poses = {
+            'right': PoseStamped(
+                header=hdr,
+                pose=Pose(
+                    position=Point(
+                        x=position[0],
+                        y=position[1],
+                        z=position[2],
+                    ),
+                    orientation=Quaternion(
+                        x=orientation[0],
+                        y=orientation[1],
+                        z=orientation[2],
+                        w=orientation[3],
+                    ),
+                ),
+            ),
+        }
+
+        # Add desired pose for inverse kinematics
+        self._ikreq.pose_stamp[0] = poses['right']
+
+        try:
+            rospy.wait_for_service(self._ik_ns, 5.0)
+            resp = self._iksvc(self._ikreq)
+        except (rospy.ServiceException, rospy.ROSException) as e:
+            rospy.logerr("Service call failed: %s" % (e,))
+            return False
+        
+        positions = list(resp.joints[0].position)
+        positions[5] = positions[5] + 0.002
+        positions = tuple(positions)
+
+        return dict(zip(resp.joints[0].name, positions))
+
+    def fk_srv(self):
+
+        self._joints.name = self.joint_names
+        self._joints.position = self.joint_angles
+
+        # Add desired pose for forward kinematics
+        self._fkreq.configuration[0] = self._joints
+
+        try:
+            rospy.wait_for_service(self._ns, 5.0)
+            resp = self._fksvc(self._fkreq)
+        except (rospy.ServiceException, rospy.ROSException) as e:
+            rospy.logerr("Service call failed: %s" % (e,))
+            return False
+        
+        return resp
+
+
+    def _on_joint_states(self, msg):
+        self.joint_names=msg.name
+        self.joint_angles=msg.position
+
     def _pos_path(self):
         
         # Get the directory of the current script
@@ -245,11 +362,26 @@ class SawyerRobot():
 
     #Give current endpoint pose with orientation in euler angles
     def current_endpoint_pose(self, quaternion=False):
+        
+        endpoint = self.fk_srv()
+
+        x = endpoint.pose_stamp[0].pose.position.x
+        y = endpoint.pose_stamp[0].pose.position.y
+        z = endpoint.pose_stamp[0].pose.position.z
+
+        endpoint_position = [x,y,z]
+
+        x = endpoint.pose_stamp[0].pose.orientation.x
+        y = endpoint.pose_stamp[0].pose.orientation.y
+        z = endpoint.pose_stamp[0].pose.orientation.z
+        w = endpoint.pose_stamp[0].pose.orientation.w
+
+        endpoint_orientation_quaternion = [x,y,z,w]
 
         #Obtain pose through transforms
-        if self.tf.frameExists(self.tip_name) and self.tf.frameExists("base"):
+        #if self.tf.frameExists(self.tip_name) and self.tf.frameExists("base"):
             #t = self.tf.getLatestCommonTime("base",self.tip_name)
-            endpoint_position, endpoint_orientation_quaternion = self.tf.lookupTransform("base",self.tip_name, rospy.Time(0))
+            #endpoint_position, endpoint_orientation_quaternion = self.tf.lookupTransform("base",self.tip_name, rospy.Time(0))
 
         #Transform to roll pitch yaw for movement
         roll, pitch, yaw = euler_from_quaternion(endpoint_orientation_quaternion)
@@ -350,7 +482,7 @@ class SawyerRobot():
 
     #Moves to desired absolute position using linear interpolation (Orientation in Euler angles ori = [roll, pitch, yaw])
     #Pos no = 0, moves to the position at position and orientation arguments, else to the saved position
-    def move_to_cartesian_absolute(self, position = [0.4, 0.0, 0.4], orientation = [-3.1210, 0.0, -3.1314], pos_no=0, move_confirm=True, verbose=True):
+    def move_to_cartesian_absolute(self, position = [0.0, -0.4, 0.34], orientation = [-3.14, 0.008, 1.5708], pos_no=0, move_confirm=True, verbose=True):
         
         #Reinitialize trajectory so that only one waypoint is executed
         self.traj = MotionTrajectory(trajectory_options = self._traj_options, limb = self._limb)
@@ -428,16 +560,16 @@ class SawyerRobot():
         move_pose = PoseStamped()
         
         #Add movement to current position
-        move_pose.pose.position.x = current_position[0] + position[0]
-        move_pose.pose.position.y = current_position[1] + position[1]
+        move_pose.pose.position.x = current_position[0] + position[1]
+        move_pose.pose.position.y = current_position[1] - position[0]
         move_pose.pose.position.z = current_position[2] + position[2]
         
         #Add orientation movement to current orientation in euler angles and transform to quaternion      
 	
         move_euler = [0,0,0]
-        move_euler[0] = current_orientation[0] + orientation[0]
-        move_euler[1] = current_orientation[1] + orientation[1] 
-        move_euler[2] = current_orientation[2] + orientation[2] 
+        move_euler[0] = current_orientation[0] - orientation[0]
+        move_euler[1] = current_orientation[1] - orientation[1] 
+        move_euler[2] = current_orientation[2] - orientation[2] 
         
         roll = move_euler[0]
         pitch = move_euler[1]
@@ -491,16 +623,16 @@ class SawyerRobot():
         current_position, current_orientation = self.current_endpoint_pose(quaternion=True)
         
         #Obtain final position from relative movement
-        final_pose.pose.position.x = current_position[0] + move_position[0]
-        final_pose.pose.position.y = current_position[1] + move_position[1]
+        final_pose.pose.position.x = current_position[0] + move_position[1]
+        final_pose.pose.position.y = current_position[1] - move_position[0]
         final_pose.pose.position.z = current_position[2] + move_position[2]
 
         #Distance to be traveled by end effector in a linear fashion
         delta = Point()
         
         #Compute steps and final time based on desired linear speed
-        delta.x = abs(move_position[0])
-        delta.y = abs(move_position[1])
+        delta.x = abs(move_position[1])
+        delta.y = abs(-move_position[0])
         delta.z = abs(move_position[2])
         
         #Obtain total traveled distance by end effector
@@ -523,8 +655,8 @@ class SawyerRobot():
         
         #Step size for interpolation based on distance to be traveled and desired steps
         ik_delta = Point()
-        ik_delta.x = (move_position[0]) / steps
-        ik_delta.y = (move_position[1]) / steps
+        ik_delta.x = (move_position[1]) / steps
+        ik_delta.y = (-move_position[0]) / steps
         ik_delta.z = (move_position[2]) / steps
 
         for d in range(int(steps), -1, -1):
