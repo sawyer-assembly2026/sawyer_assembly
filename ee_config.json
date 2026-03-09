@@ -1,0 +1,856 @@
+{
+  "__schema": "SmartToolPlateEndEffectorConfiguration",
+  "__schemaVersion": [
+    3,
+    0,
+    0
+  ],
+  "params": {
+    "command_timeout_seconds": 0.05,
+    "doc": "Important: The order of the commands list determines command sequence when more than one command is pending.",
+    "endpoints": {
+      "stp_021709TP00448_tip": {
+        "actuationTimeS": 0.4,
+        "closed": "closed_H1QNNX9lAW",
+        "endpoint_id": "stp_021709TP00448_tip",
+        "fixed": false,
+        "grip": "grip_B1IV4mqlAZ",
+        "label": "A Grip",
+        "object_kg_signal": "stp_021709TP00448_tip_object_kg",
+        "open": "open_BJNNm9eRW",
+        "power": "power_By4VVX5lCb",
+        "type": "gripper"
+      },
+      "stp_021709TP00448_tip_167": {
+        "actuationTimeS": 0.4,
+        "closed": "closed_B1bbr7qgRZ",
+        "endpoint_id": "stp_021709TP00448_tip_167",
+        "fixed": false,
+        "grip": "grip_rk7WBQceRZ",
+        "label": "B Grip",
+        "object_kg_signal": "stp_021709TP00448_tip_167_object_kg",
+        "open": "open_SJgWBm5eCZ",
+        "power": "power_rkfWHXqg0b",
+        "type": "gripper"
+      }
+    },
+    "label": "PNeumatic Gripper",
+    "model": {
+      "child_joint_name": "stp_021709TP00448_base_joint",
+      "parent_link_name": "right_hand",
+      "urdf": {
+        "joint": [
+          {
+            "child": {
+              "link": "stp_021709TP00448_base"
+            },
+            "name": "stp_021709TP00448_base_joint",
+            "origin": {
+              "rpy": [
+                0,
+                0,
+                0
+              ],
+              "xyz": [
+                0,
+                0,
+                -0.005
+              ]
+            },
+            "parent": {
+              "link": "right_hand"
+            },
+            "type": "fixed"
+          },
+          {
+            "child": {
+              "link": "stp_021709TP00448_tip"
+            },
+            "name": "stp_021709TP00448_tip_jnt",
+            "origin": {
+              "rpy": [
+                0,
+                0,
+                0
+              ],
+              "xyz": [
+                0,
+                0,
+                0.1944
+              ]
+            },
+            "parent": {
+              "link": "stp_021709TP00448_base"
+            },
+            "type": "fixed"
+          },
+          {
+            "child": {
+              "link": "stp_021709TP00448_tip_167"
+            },
+            "name": "stp_021709TP00448_tip_167_jnt",
+            "origin": {
+              "rpy": [
+                0,
+                0,
+                3.1416
+              ],
+              "xyz": [
+                0.035,
+                0.05,
+                0.095
+              ]
+            },
+            "parent": {
+              "link": "stp_021709TP00448_base"
+            },
+            "type": "fixed"
+          }
+        ],
+        "link": [
+          {
+            "collision": {
+              "geometry": {
+                "cylinder": {
+                  "length": "0.0269",
+                  "radius": "0.070"
+                }
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0.01845
+                ]
+              }
+            },
+            "inertial": {
+              "inertia": {
+                "ixx": 0.00501355,
+                "ixy": 0.0,
+                "ixz": 0.0,
+                "iyy": 0.00534656,
+                "iyz": 0.0,
+                "izz": 0.00192593
+              },
+              "mass": {
+                "value": 1.65
+
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0.0006,
+                  -0.0005,
+                  0.065
+                ]
+              }
+            },
+            "name": "stp_021709TP00448_base",
+            "visual": {
+              "geometry": {
+                "mesh": {
+                  "filename": "package://intera_tools_description/meshes/smart_tool_plate/smart_tool_plate.DAE"
+                }
+              },
+              "material": {
+                "color": {
+                  "rgba": [
+                    0,
+                    0,
+                    0,
+                    1
+                  ]
+                },
+                "name": ""
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "collision": {
+              "geometry": {
+                "box": {
+                  "size": [
+                    0.01,
+                    0.01,
+                    0.01
+                  ]
+                }
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            },
+            "inertial": {
+              "inertia": {
+                "ixx": 1e-08,
+                "ixy": 0,
+                "ixz": 0,
+                "iyy": 1e-08,
+                "iyz": 0,
+                "izz": 1e-08
+              },
+              "mass": {
+                "value": 0
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            },
+            "name": "stp_021709TP00448_tip",
+            "visual": {
+              "geometry": {
+                "box": {
+                  "size": [
+                    0.015,
+                    0.015,
+                    0.015
+                  ]
+                }
+              },
+              "material": {
+                "color": {
+                  "rgba": [
+                    0.2,
+                    0.3,
+                    0.3,
+                    1
+                  ]
+                },
+                "name": "darkgrey"
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "collision": {
+              "geometry": {
+                "box": {
+                  "size": [
+                    0.01,
+                    0.01,
+                    0.01
+                  ]
+                }
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            },
+            "inertial": {
+              "inertia": {
+                "ixx": 0,
+                "ixy": 0,
+                "ixz": 0,
+                "iyy": 0,
+                "iyz": 0,
+                "izz": 0
+              },
+              "mass": {
+                "value": 0
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            },
+            "name": "stp_021709TP00448_tip_167",
+            "visual": {
+              "geometry": {
+                "box": {
+                  "size": [
+                    0.015,
+                    0.015,
+                    0.015
+                  ]
+                }
+              },
+              "material": {
+                "color": {
+                  "rgba": [
+                    0.2,
+                    0.3,
+                    0.3,
+                    1
+                  ]
+                },
+                "name": "darkgrey"
+              },
+              "origin": {
+                "rpy": [
+                  0,
+                  0,
+                  0
+                ],
+                "xyz": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            }
+          }
+        ],
+        "name": "stp_021709TP00448"
+      }
+    }
+  },
+  "ports": {
+    "A_analog_in": {
+      "params": {
+        "bits": 0,
+        "mask": 63,
+        "write_command": "gpo_write"
+      },
+      "props": {
+        "format": {
+          "max": 28.1,
+          "min": 0,
+          "multiple": 0.05,
+          "role": "source",
+          "type": "float",
+          "units": "volts"
+        },
+        "rev": 1,
+        "type": "Analog"
+      }
+    },
+    "A_in1": {
+      "params": {
+        "bit_index": 4,
+        "command": "gpi_read"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "source",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "A_in2": {
+      "params": {
+        "bit_index": 5,
+        "command": "gpi_read"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "source",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "A_out1": {
+      "params": {
+        "bit_index": 0,
+        "command": "gpo_write"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "sink",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "A_out2": {
+      "params": {
+        "bit_index": 1,
+        "command": "gpo_write"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "sink",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "B_analog_in": {
+      "params": {
+        "bits": 128,
+        "mask": 63,
+        "write_command": "gpo_write"
+      },
+      "props": {
+        "format": {
+          "max": 28.1,
+          "min": 0,
+          "multiple": 0.05,
+          "role": "source",
+          "type": "float",
+          "units": "volts"
+        },
+        "rev": 1,
+        "type": "Analog"
+      }
+    },
+    "B_in1": {
+      "params": {
+        "bit_index": 6,
+        "command": "gpi_read"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "source",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "B_in2": {
+      "params": {
+        "bit_index": 7,
+        "command": "gpi_read"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "source",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "B_out1": {
+      "params": {
+        "bit_index": 2,
+        "command": "gpo_write"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "sink",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    },
+    "B_out2": {
+      "params": {
+        "bit_index": 3,
+        "command": "gpo_write"
+      },
+      "props": {
+        "format": {
+          "data_type": "u1",
+          "role": "sink",
+          "type": "int"
+        },
+        "rev": 1,
+        "type": "GPIO"
+      }
+    }
+  },
+  "props": {
+    "commands": [
+      {
+        "init": [
+          {
+            "data": [
+              170
+            ],
+            "op": "write",
+            "reg": 2,
+            "type": "reg"
+          },
+          {
+            "data": [
+              170
+            ],
+            "op": "write",
+            "reg": 3,
+            "type": "reg"
+          },
+          {
+            "data": [
+              5
+            ],
+            "op": "write",
+            "reg": 7,
+            "type": "reg"
+          },
+          {
+            "data": [
+              5
+            ],
+            "op": "write",
+            "reg": 8,
+            "type": "reg"
+          }
+        ]
+      },
+      {
+        "gpo_write": [
+          {
+            "data": [
+              48
+            ],
+            "op": "write",
+            "type": "gpio"
+          },
+          {
+            "op": "read",
+            "type": "gpio"
+          }
+        ]
+      },
+      {
+        "gpi_read": [
+          {
+            "dev": 64,
+            "op": "read",
+            "type": "dev"
+          }
+        ]
+      }
+    ],
+    "end_effector_id": "021709TP00448",
+    "id": "/io/end_effector/stp_021709TP00448",
+    "manufacturer_name": "Rethink Robotics, Inc.",
+    "mount": "right",
+    "name": "stp_021709TP00448",
+    "owner": "node",
+    "product_name": "Smart Tool Plate",
+    "rev": 1,
+    "state_pub_rate_hz": 5,
+    "type": "SmartToolPlate",
+    "update_rate_hz": 50
+  },
+  "signals": {
+    "closed_B1bbr7qgRZ": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          0
+        ],
+        "endpointId": "stp_021709TP00448_tip_167",
+        "extra": {
+          "eeSignalType": "closed",
+          "valueWhenTrue": 0
+        },
+        "inverted": true,
+        "label": "@endEffectorSignals.closed"
+      },
+      "props": {
+        "format": {
+          "role": "input",
+          "type": "bool"
+        },
+        "name": "closed_B1bbr7qgRZ",
+        "rev": 1,
+        "source": "B_in2",
+        "type": "Digital"
+      }
+    },
+    "closed_H1QNNX9lAW": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          0
+        ],
+        "endpointId": "stp_021709TP00448_tip",
+        "extra": {
+          "eeSignalType": "closed",
+          "valueWhenTrue": 0
+        },
+        "inverted": true,
+        "label": "@endEffectorSignals.closed"
+      },
+      "props": {
+        "format": {
+          "role": "input",
+          "type": "bool"
+        },
+        "name": "closed_H1QNNX9lAW",
+        "rev": 1,
+        "source": "A_in2",
+        "type": "Digital"
+      }
+    },
+    "grip_B1IV4mqlAZ": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          false
+        ],
+        "endpointId": "stp_021709TP00448_tip",
+        "extra": {
+          "eeSignalType": "grip",
+          "valueWhenTrue": 1
+        },
+        "inverted": false,
+        "label": "@endEffectorSignals.grip"
+      },
+      "props": {
+        "format": {
+          "role": "output",
+          "type": "bool"
+        },
+        "name": "grip_B1IV4mqlAZ",
+        "rev": 1,
+        "sink": "A_out2",
+        "type": "Digital"
+      }
+    },
+    "grip_rk7WBQceRZ": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          true
+        ],
+        "endpointId": "stp_021709TP00448_tip_167",
+        "extra": {
+          "eeSignalType": "grip",
+          "valueWhenTrue": 0
+        },
+        "inverted": true,
+        "label": "@endEffectorSignals.grip"
+      },
+      "props": {
+        "format": {
+          "role": "output",
+          "type": "bool"
+        },
+        "name": "grip_rk7WBQceRZ",
+        "rev": 1,
+        "sink": "B_out2",
+        "type": "Digital"
+      }
+    },
+    "open_BJNNm9eRW": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          0
+        ],
+        "endpointId": "stp_021709TP00448_tip",
+        "extra": {
+          "eeSignalType": "open",
+          "valueWhenTrue": 0
+        },
+        "inverted": true,
+        "label": "@endEffectorSignals.open"
+      },
+      "props": {
+        "format": {
+          "role": "input",
+          "type": "bool"
+        },
+        "name": "open_BJNNm9eRW",
+        "rev": 1,
+        "source": "A_in1",
+        "type": "Digital"
+      }
+    },
+    "open_SJgWBm5eCZ": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          0
+        ],
+        "endpointId": "stp_021709TP00448_tip_167",
+        "extra": {
+          "eeSignalType": "open",
+          "valueWhenTrue": 0
+        },
+        "inverted": true,
+        "label": "@endEffectorSignals.open"
+      },
+      "props": {
+        "format": {
+          "role": "input",
+          "type": "bool"
+        },
+        "name": "open_SJgWBm5eCZ",
+        "rev": 1,
+        "source": "B_in1",
+        "type": "Digital"
+      }
+    },
+    "power_By4VVX5lCb": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          true
+        ],
+        "endpointId": "stp_021709TP00448_tip",
+        "extra": {
+          "eeSignalType": "power",
+          "valueWhenTrue": 1
+        },
+        "inverted": false,
+        "label": "@endEffectorSignals.power"
+      },
+      "props": {
+        "format": {
+          "role": "output",
+          "type": "bool"
+        },
+        "name": "power_By4VVX5lCb",
+        "rev": 1,
+        "sink": "A_out1",
+        "type": "Digital"
+      }
+    },
+    "power_rkfWHXqg0b": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          true
+        ],
+        "endpointId": "stp_021709TP00448_tip_167",
+        "extra": {
+          "eeSignalType": "power",
+          "valueWhenTrue": 1
+        },
+        "inverted": false,
+        "label": "@endEffectorSignals.power"
+      },
+      "props": {
+        "format": {
+          "role": "output",
+          "type": "bool"
+        },
+        "name": "power_rkfWHXqg0b",
+        "rev": 1,
+        "sink": "B_out1",
+        "type": "Digital"
+      }
+    },
+    "stp_021709TP00448_tip_167_object_kg": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          0
+        ],
+        "label": "Object Mass - B Grip",
+        "urdf_link_name": "stp_021709TP00448_tip_167"
+      },
+      "props": {
+        "format": {
+          "max": 4,
+          "min": 0,
+          "role": "output",
+          "type": "float",
+          "units": "kilograms"
+        },
+        "name": "stp_021709TP00448_tip_167_object_kg",
+        "rev": 1,
+        "type": "Mass"
+      }
+    },
+    "stp_021709TP00448_tip_object_kg": {
+      "__schema": "SignalConfiguration",
+      "__schemaVersion": 0,
+      "params": {
+        "default": [
+          0
+        ],
+        "label": "Object Mass - A Grip",
+        "urdf_link_name": "stp_021709TP00448_tip"
+      },
+      "props": {
+        "format": {
+          "max": 4,
+          "min": 0,
+          "role": "output",
+          "type": "float",
+          "units": "kilograms"
+        },
+        "name": "stp_021709TP00448_tip_object_kg",
+        "rev": 1,
+        "type": "Mass"
+      }
+    }
+  }
+}
