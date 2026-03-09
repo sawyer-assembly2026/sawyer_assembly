@@ -30,7 +30,8 @@ class FuzzyArtMap:
         self.ARTb_nodes = ARTb_nodes
         
         #Vigilance Parameters
-        self.rho_a = baseline_vigilance
+        self.baseline_vigilance = baseline_vigilance
+        self.rho_a = self.baseline_vigilance
         self.rho_b = 0.9
         self.rho_ab = 0.95
         
@@ -173,6 +174,8 @@ class FuzzyArtMap:
         np.savetxt(weights_a_path, weight_a, delimiter=',', fmt='%f')
         np.savetxt(weights_b_path, weight_b, delimiter=',', fmt='%f')
         np.savetxt(weights_ab_path, weight_ab, delimiter=',', fmt='%f')
+
+        print("Weights updated!")
     
     #Add complement to input
     def _complement_encode(self,Ia,Ib):
@@ -265,23 +268,26 @@ class FuzzyArtMap:
             
             #Add complement encoding to original inputs
             Iac, Ibc = self._complement_encode(Ia, Ib)
-        
+
         #Loop Training for each set of inputs Ia, Ib (Must be same number of inputs)
         for i in range(Ia.shape[0]):
-            
+
             #ART a nodes reset by Map Field
             reset_nodes_map = []
-            
+
+            #Flag for pattern disprove when entering
+            pattern_disprove = False
+
             #Resonance Flags(ARTa, ARTb, Map Field)
             resonance_a = False
             resonance_b = False
             resonance_ab = False
-            
+
             #ARTa Resonance Search with baseline vigilance
             Ja, resonance_a, rho_a, weight_a = self._resonance_search(weight=weight_a, Ii=Iac[i], rho=self.rho_a, reset_nodes=[])
             #ARTb Resonance Search
             Jb, resonance_b, rho_b, weight_b = self._resonance_search(weight=weight_b, Ii=Ibc[i], rho=self.rho_b, reset_nodes=[])
-            
+
             if resonance_a and not resonance_b:
                 weight_ab = np.hstack((weight_ab, np.zeros((self.ARTa_nodes,1))))
                 self.ARTb_nodes += 1
@@ -296,7 +302,10 @@ class FuzzyArtMap:
                 if not resonance_a:
                     weight_ab = np.vstack((weight_ab, np.ones((1,self.ARTb_nodes))))
                     self.ARTa_nodes += 1
-            
+
+            if not resonance_a and not resonance_b:
+                pattern_disprove = True
+
             #Match Tracking at map field Fab
             while not resonance_ab:
                 
@@ -314,11 +323,12 @@ class FuzzyArtMap:
                     #weights at ARTb, but we did at ARTa, that is a contradiction, since we are doing a relation
                     #between inputs and outputs, that is as saying I found something that does not exist yet
                     #that is why you need to consider the node at ARTb as the parent for this weight update and also
-                    #add a new neuron at ARTa, since we know that we already know the prediction is not correct
+                    #add a new neuron at ARTa, since we know already the prediction is not correct
                     Ja = Jb
                     
                     #Do not add weight at last input
-                    if i != (Ia.shape[0]-1):
+                    #if i != (Ia.shape[0]-1) and pattern_disprove == False:
+                    if pattern_disprove == False:
                         weight_a = np.vstack((weight_a, np.ones((1,Ia_dim*2))))
                         
                 elif resonance_a == False and resonance_b == True:
@@ -334,7 +344,7 @@ class FuzzyArtMap:
                     #Update learning rate if nodes already commited
                     
                     beta_b = self.beta_b
-                    
+
                     if Ja in self.committed_nodes:
                         beta_a = self.committed_beta_a
                         beta_ab = self.committed_beta_ab
@@ -347,7 +357,7 @@ class FuzzyArtMap:
                     weight_b[Jb] = (beta_b * (np.minimum(Ibc[i],weight_b[Jb]))) + ((1 - beta_b) * weight_b[Jb])
                     weight_ab[Ja] = (beta_ab * (np.minimum(y_b,weight_ab[Ja]))) + ((1 - beta_ab) * weight_ab[Ja])
                     self.committed_nodes.add(Ja)
-                    
+
                     resonance_ab = True
 
                 else:
@@ -426,14 +436,14 @@ class FuzzyArtMap:
         resonance_a = False
             
         #ARTa Resonance Search with baseline vigilance
-        Ja, resonance_a, rho_a, self.weight_a = self._resonance_search(weight=self.weight_a, Ii=Ia, rho=self.rho_a)
+        Ja, resonance_a, rho_a, self.weight_a = self._resonance_search(weight=self.weight_a, Ii=Ia, rho=self.rho_a, reset_nodes=[])
         
         #If category found among existing ones return Jab prediction
         #else return none as it means pattern is not recognized by network and needs to be classified
         if resonance_a:
             
             #Category is labeled as the the weight not zer amongst the columns of weights at map field from F2a
-            ja_wab = self.weight_ab[Ja]        
+            ja_wab = self.weight_ab[Ja]
             Jab = np.nonzero(ja_wab)[0].item()
             return [Jab, Ia]
     
@@ -444,4 +454,14 @@ class FuzzyArtMap:
             self.weight_ab = np.vstack((self.weight_ab, np.ones((1,self.ARTb_nodes))))
             
             return [None, Ia]
+        
+    #If when doing predictions training is canceled remove unnecesary weights
+    def remove_prediction_weight(self):
+        #Remove new node since training was canceled
+        self.weight_a = np.delete(self.weight_a, -1, axis=0)
+        self.ARTa_nodes -= 1
+
+        #Remove new node at field map ab
+        self.weight_ab = np.delete(self.weight_ab, -1, axis=0)
+
         
