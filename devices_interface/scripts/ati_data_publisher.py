@@ -7,6 +7,7 @@ from devices_interface import ATI_Net as ati
 
 def publish_ftdata(sensor_ref):
     pub = rospy.Publisher('/robot/ati_ft_sensor_topic/', WrenchStamped, queue_size=1)
+    pub_raw = rospy.Publisher('/robot/ati_ft_sensor_topic_raw/', WrenchStamped, queue_size=1)
     rospy.init_node('ati_ftsensor_data_pub', anonymous=True)
     rate = rospy.Rate(100) # 100hz
 
@@ -30,6 +31,16 @@ def publish_ftdata(sensor_ref):
         #Get sensor raw data Force (N) and Moment (Nm)
         raw_data = sensor_ref.get_data()
         
+        #Put data in auxiliary data to publish
+        ft_wrench.wrench.force.x = raw_data[0]
+        ft_wrench.wrench.force.y = raw_data[1]
+        ft_wrench.wrench.force.z = raw_data[2]
+        ft_wrench.wrench.torque.x = raw_data[3]
+        ft_wrench.wrench.torque.y = raw_data[4]
+        ft_wrench.wrench.torque.z = raw_data[5]
+
+        pub_raw.publish(ft_wrench)
+
         #Normalize data
         #Check limits of force and moment
         raw_data[0] = (raw_data[0] + 8)/16
