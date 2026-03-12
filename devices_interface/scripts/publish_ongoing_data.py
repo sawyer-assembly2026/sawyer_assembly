@@ -97,7 +97,7 @@ if __name__ == '__main__':
         rospy.Subscriber('/robot/artmap_assembly_zcurrent/', Float32, obtain_zcurrent, queue_size=1)
         rospy.Subscriber('/robot/artmap_assembly_Jcurrent/', Float32, obtain_Jcurrent, queue_size=1)
         rospy.Subscriber('/robot/artmap_assembly_prediction/', Int32, obtain_prediction, queue_size=1)
-        rospy.Subscriber('/robot/ati_ft_sensor_topic/', WrenchStamped, obtain_ftdata_raw, queue_size=1)
+        rospy.Subscriber('/robot/ati_ft_sensor_topic_raw/', WrenchStamped, obtain_ftdata_raw, queue_size=1)
 
         #Create image publisher for head display
         image_pub = rospy.Publisher('/robot/head_display', Image, latch=True, queue_size=10)
